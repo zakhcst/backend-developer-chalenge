@@ -1,0 +1,1 @@
+curl -X POST -d @events.js "http://localhost:3000/addevents" -H "Content-Type: application/json" > responses/populated-product-view.js

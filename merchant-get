@@ -1,0 +1,1 @@
+curl localhost:3000/merchantsummary/YcxOCwj0jg  > responses/response-merchant-msYcxOCwj0jg-summary.json
