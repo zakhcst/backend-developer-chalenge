@@ -15,6 +15,10 @@ const app = express();
 app.use(morgan(':date :remote-addr :status :method :response-time ms :url :user-agent'));
 // middleware for parsing the body to json
 app.use(bodyParser.json());
+app.use((req, res, next) => {
+    console.log('allEvents', allEvents.length);
+    next();
+});
 
 
 // Basic routing
@@ -29,6 +33,15 @@ app.get('/merchantsummary/:id', function (req, res) {
     // Validate merchant id
     if (validateMerchant(req.params.id)) {
         res.json(merchantSummaries[req.params.id]);
+    } else {
+        errorHandling({message: 'Invalid merchant', status: 404}, res);
+    }
+});
+
+app.get('/generate-merchantsummary/:id', function (req, res) {
+    // Validate merchant id
+    if (validateMerchant(req.params.id)) {
+        res.json(generateMerchantSummary(req.params.id));
     } else {
         errorHandling({message: 'Invalid merchant', status: 404}, res);
     }
@@ -53,21 +66,22 @@ function processEvents(req, res) {
     let eventsResponses = [];
 
     if (Object.keys(events).length === 0 && events.constructor === Object) {
-        return errorHandling({message: 'No events', status: 400}, res); // bad data response
+        return errorHandling({message: 'No events', status: 400}, res);
     }
 
     events.forEach(event => {
         eventsQ = eventsQ.then(() => {
             return populateProducts(event)
-                .then(updateEvents)
-                .then(updateMerchantSummary)
-                .then((event) => {
-                    if (event.type === 'product-view') {
-                        eventsResponses.push(event);
-                    }
-                });
+            .then(updateEvents)
+            .then(updateMerchantSummary)
+            .then((event) => {
+                if (event.type === 'product-view') {
+                    eventsResponses.push(event);
+                }
+            });
         });
     });
+    
     return eventsQ
         .then((event) => sendResponse(req, res, eventsResponses))
         .catch(err => errorHandling(err, res));
@@ -84,6 +98,52 @@ function updateEvents(event) {
     allEvents.push(event);
     return event;
 }
+
+function generateMerchantSummary(merchantId) {
+    
+    let merchantSummary = JSON.parse(generateMerchantSummarySchema);
+    let eventView = JSON.parse(generateMerchantSummaryEventViewSchema);
+    let eventTransaction = JSON.parse(generateMerchantSummaryEventTransactionSchema);
+    
+    let uniqUserIdsAll = new Set();
+    let uniqUserIdsView = new Set();
+    let uniqUserIdsTransaction = new Set();
+    
+    allEvents.forEach(event => {
+        if (event.merchant !== merchantId) return;
+        
+        merchantSummary.total_events++;
+        uniqUserIdsAll.add(event.user);
+        
+        if (event.type === 'product-view') { 
+            eventView.total_events++;
+            uniqUserIdsView.add(event.user);
+        }
+        
+        if (event.type === 'transaction') { 
+            eventTransaction.total_events++;
+            uniqUserIdsTransaction.add(event.user);
+            eventTransaction.total_value += event.data.transaction.total;
+        }
+    });
+    
+    merchantSummary.number_of_customers = uniqUserIdsAll.size;
+    eventView.number_of_customers = uniqUserIdsView.size;
+    eventTransaction.number_of_customers = uniqUserIdsTransaction.size;
+ 
+    merchantSummary.events_summary.push(eventView);
+    merchantSummary.events_summary.push(eventTransaction);
+         
+    return merchantSummary;
+}
+
+// Sending back response for all "product-view" events in the same request
+function sendResponse(req, res, eventsResponses) {
+    if (eventsResponses.length > 0) {
+        res.json(eventsResponses);
+    }
+}
+
 
 function updateMerchantSummary(event) {
     let merchantEvents, merchantSummary;
@@ -108,7 +168,7 @@ function updateMerchantSummary(event) {
     if (event.type === 'transaction') { // hard coded feature for the event type
         merchantEventsSummary.total_value += event.data.transaction.total;
     }
-    
+   
     return event;
 }
 
@@ -183,3 +243,21 @@ const merchantSummaryTemplate = JSON.stringify({
         "total_value": 0
     }]
 });
+
+const generateMerchantSummarySchema = JSON.stringify({
+    "total_events": 0,
+    "number_of_customers": 0,
+    "events_summary": []
+});
+const generateMerchantSummaryEventViewSchema = JSON.stringify({
+    "type": "product-view",
+    "total_events": 0,
+    "number_of_customers": 0
+});
+const generateMerchantSummaryEventTransactionSchema = JSON.stringify({
+    "type": "transaction",
+    "total_events": 0,
+    "number_of_customers": 0,
+    "total_value": 0
+});
+

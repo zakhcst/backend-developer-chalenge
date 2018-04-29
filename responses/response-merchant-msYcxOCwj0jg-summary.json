@@ -1,1 +1,1 @@
-{"total_events":3,"number_of_customers":3,"events_summary":[{"type":"product-view","total_events":0,"number_of_customers":0},{"type":"transaction","total_events":3,"number_of_customers":3,"total_value":165}]}
+{"total_events":17,"number_of_customers":17,"events_summary":[{"type":"product-view","total_events":0,"number_of_customers":0},{"type":"transaction","total_events":17,"number_of_customers":17,"total_value":935}]}
